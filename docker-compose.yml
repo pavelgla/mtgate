@@ -1,0 +1,37 @@
+version: "3.9"
+
+networks:
+  mtgate-net:
+    driver: bridge
+
+services:
+  proxy:
+    build: ./proxy
+    container_name: mtgate-proxy
+    restart: unless-stopped
+    ports:
+      - "8444:3128"
+    volumes:
+      - ./cache:/cache
+    networks:
+      - mtgate-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  admin:
+    build: ./admin
+    container_name: mtgate-admin
+    restart: unless-stopped
+    ports:
+      - "8889:8889"
+    volumes:
+      - ./cache:/cache
+      - /var/run/docker.sock:/var/run/docker.sock
+    network_mode: host
+    env_file:
+      - .env
+    cap_add:
+      - NET_ADMIN

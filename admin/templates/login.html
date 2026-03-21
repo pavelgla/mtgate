@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mtgate — вход</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #c9d1d9; --muted: #8b949e; --accent: #238636; --radius: 6px; }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 32px; width: 320px; }
+    h1 { font-size: 20px; margin-bottom: 24px; text-align: center; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    input { width: 100%; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 14px; outline: none; margin-bottom: 16px; }
+    input:focus { border-color: #58a6ff; }
+    button { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; }
+    button:hover { background: #2ea043; }
+    .error { background: #3b1a1a; border: 1px solid #da3633; color: #f85149; padding: 8px 12px; border-radius: var(--radius); font-size: 13px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>🔐 mtgate</h1>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="POST">
+    <label for="password">Пароль</label>
+    <input type="password" id="password" name="password" autofocus required>
+    <button type="submit">Войти</button>
+  </form>
+</div>
+</body>
+</html>

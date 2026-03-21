@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Пользователи — mtgate{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .page-header h2 { font-size: 18px; font-weight: 600; }
+  .copy-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: var(--radius); padding: 3px 8px; font-size: 11px; cursor: pointer; transition: all 0.15s; }
+  .copy-btn:hover { border-color: var(--link); color: var(--link); }
+  .copy-btn.copied { border-color: var(--accent); color: #3fb950; }
+  .ip-cell { font-family: monospace; font-size: 12px; color: var(--muted); }
+  .date-cell { font-size: 12px; color: var(--muted); }
+  .actions-cell { display: flex; gap: 6px; align-items: center; }
+  .empty { text-align: center; padding: 48px; color: var(--muted); }
+  .count { color: var(--muted); font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2>Пользователи</h2>
+    <span class="count" id="user-count">{{ users | length }} пользователей</span>
+  </div>
+  <button class="btn btn-primary" onclick="document.getElementById('create-modal').classList.add('active')">
+    + Создать пользователя
+  </button>
+</div>
+
+{% if users %}
+<table>
+  <thead>
+    <tr>
+      <th>Имя</th>
+      <th>Статус</th>
+      <th>Привязан к</th>
+      <th>Активный IP</th>
+      <th>Создан</th>
+      <th>Ссылка</th>
+      <th>Действия</th>
+    </tr>
+  </thead>
+  <tbody id="users-tbody">
+    {% for user in users %}
+    <tr data-name="{{ user.name }}">
+      <td><strong>{{ user.name }}</strong></td>
+      <td>
+        <span class="badge {% if user.enabled %}badge-green{% else %}badge-red{% endif %}" data-status>
+          {% if user.enabled %}активен{% else %}отключён{% endif %}
+        </span>
+      </td>
+      <td class="ip-cell" data-bound-ip>
+        {% if user.bound_ip %}
+          <span title="Устройство привязано">{{ user.bound_ip }}</span>
+        {% else %}
+          <span style="color:var(--muted)">не привязан</span>
+        {% endif %}
+      </td>
+      <td class="ip-cell" data-ip>{{ user.active_ip or '—' }}</td>
+      <td class="date-cell">{{ user.created_at[:10] }}</td>
+      <td>
+        <button class="copy-btn" onclick="copyLink('{{ user.name }}', this)" title="Копировать tg:// ссылку">
+          📋 Скопировать
+        </button>
+      </td>
+      <td class="actions-cell">
+        <form method="POST" action="/users/{{ user.name }}/toggle">
+          <button type="submit" class="btn btn-secondary btn-sm">
+            {% if user.enabled %}Откл{% else %}Вкл{% endif %}
+          </button>
+        </form>
+        {% if user.bound_ip %}
+        <form method="POST" action="/users/{{ user.name }}/reset-binding" onsubmit="return confirm('Сбросить привязку устройства для {{ user.name }}?')">
+          <button type="submit" class="btn btn-secondary btn-sm" title="Сбросить привязанное устройство">Сброс IP</button>
+        </form>
+        {% endif %}
+        <form method="POST" action="/users/{{ user.name }}/delete" onsubmit="return confirm('Удалить пользователя {{ user.name }}?')">
+          <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty">
+  <p>Пользователей нет. Создайте первого.</p>
+</div>
+{% endif %}
+
+<!-- Create modal -->
+<div class="modal-overlay" id="create-modal" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal">
+    <h3>Новый пользователь</h3>
+    <form method="POST" action="/users">
+      <div class="form-group">
+        <label>Имя пользователя</label>
+        <input type="text" name="name" placeholder="alice" autofocus required pattern="[a-zA-Z0-9_\-]+" title="Только буквы, цифры, _ и -">
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('create-modal').classList.remove('active')">Отмена</button>
+        <button type="submit" class="btn btn-primary">Создать</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function copyLink(name, btn) {
+  try {
+    const res = await fetch(`/users/${name}/link`);
+    const data = await res.json();
+    if (data.link) {
+      await navigator.clipboard.writeText(data.link);
+      btn.textContent = '✓ Скопировано';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '📋 Скопировать'; btn.classList.remove('copied'); }, 2000);
+    }
+  } catch (e) {
+    alert('Не удалось скопировать: ' + e.message);
+  }
+}
+
+// Auto-refresh every 30 seconds
+async function refreshUsers() {
+  try {
+    const res = await fetch('/api/users');
+    if (!res.ok) return;
+    const users = await res.json();
+    document.getElementById('user-count').textContent = users.length + ' пользователей';
+    users.forEach(u => {
+      const row = document.querySelector(`tr[data-name="${u.name}"]`);
+      if (!row) return;
+      const statusEl = row.querySelector('[data-status]');
+      if (statusEl) {
+        statusEl.textContent = u.enabled ? 'активен' : 'отключён';
+        statusEl.className = 'badge ' + (u.enabled ? 'badge-green' : 'badge-red');
+      }
+      const ipEl = row.querySelector('[data-ip]');
+      if (ipEl) ipEl.textContent = u.active_ip || '—';
+      const boundEl = row.querySelector('[data-bound-ip]');
+      if (boundEl) boundEl.textContent = u.bound_ip || 'не привязан';
+    });
+  } catch (e) {
+    // silent fail
+  }
+}
+
+setInterval(refreshUsers, 30000);
+</script>
+{% endblock %}
