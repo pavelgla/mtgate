@@ -13,6 +13,10 @@
   .actions-cell { display: flex; gap: 6px; align-items: center; }
   .empty { text-align: center; padding: 48px; color: var(--muted); }
   .count { color: var(--muted); font-size: 13px; }
+  .expires-soon { color: #f0883e; font-weight: 600; }
+  .expired { color: #f85149; }
+  .ttl-row { display: flex; gap: 8px; }
+  .ttl-row .form-group { flex: 1; }
 </style>
 {% endblock %}
 
@@ -36,6 +40,7 @@
       <th>Привязан к</th>
       <th>Активный IP</th>
       <th>Создан</th>
+      <th>Истекает</th>
       <th>Ссылка</th>
       <th>Действия</th>
     </tr>
@@ -58,6 +63,13 @@
       </td>
       <td class="ip-cell" data-ip>{{ user.active_ip or '—' }}</td>
       <td class="date-cell">{{ user.created_at[:10] }}</td>
+      <td class="date-cell" data-expires="{{ user.expires_at or '' }}">
+        {% if user.expires_at %}
+          <span class="expires-label">{{ user.expires_at[:16].replace('T', ' ') }}</span>
+        {% else %}
+          <span style="color:var(--muted)">—</span>
+        {% endif %}
+      </td>
       <td>
         <button class="copy-btn" onclick="copyLink('{{ user.name }}', this)" title="Копировать tg:// ссылку">
           📋 Скопировать
@@ -97,6 +109,19 @@
         <label>Имя пользователя</label>
         <input type="text" name="name" placeholder="alice" autofocus required pattern="[a-zA-Z0-9_\-]+" title="Только буквы, цифры, _ и -">
       </div>
+      <div class="form-group">
+        <label>Срок действия токена <span style="color:var(--muted);font-weight:400">(0 = без ограничений)</span></label>
+        <div class="ttl-row">
+          <div class="form-group">
+            <label style="font-size:11px;color:var(--muted)">Дней</label>
+            <input type="number" name="ttl_days" value="0" min="0" max="3650" style="width:100%">
+          </div>
+          <div class="form-group">
+            <label style="font-size:11px;color:var(--muted)">Часов</label>
+            <input type="number" name="ttl_hours" value="0" min="0" max="23" style="width:100%">
+          </div>
+        </div>
+      </div>
       <div class="actions">
         <button type="button" class="btn btn-secondary" onclick="document.getElementById('create-modal').classList.remove('active')">Отмена</button>
         <button type="submit" class="btn btn-primary">Создать</button>
@@ -113,7 +138,18 @@ async function copyLink(name, btn) {
     const res = await fetch(`/users/${name}/link`);
     const data = await res.json();
     if (data.link) {
-      await navigator.clipboard.writeText(data.link);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(data.link);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = data.link;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
       btn.textContent = '✓ Скопировано';
       btn.classList.add('copied');
       setTimeout(() => { btn.textContent = '📋 Скопировать'; btn.classList.remove('copied'); }, 2000);
@@ -142,6 +178,15 @@ async function refreshUsers() {
       if (ipEl) ipEl.textContent = u.active_ip || '—';
       const boundEl = row.querySelector('[data-bound-ip]');
       if (boundEl) boundEl.textContent = u.bound_ip || 'не привязан';
+      const expiresEl = row.querySelector('[data-expires]');
+      if (expiresEl && u.expires_at) {
+        expiresEl.dataset.expires = u.expires_at;
+        const label = expiresEl.querySelector('.expires-label');
+        if (label) {
+          const remaining = new Date(u.expires_at) - Date.now();
+          label.className = 'expires-label' + (remaining < 0 ? ' expired' : remaining < 3600000 ? ' expires-soon' : '');
+        }
+      }
     });
   } catch (e) {
     // silent fail
@@ -149,5 +194,16 @@ async function refreshUsers() {
 }
 
 setInterval(refreshUsers, 30000);
+
+// Highlight expiring tokens on load
+document.querySelectorAll('[data-expires]').forEach(el => {
+  const exp = el.dataset.expires;
+  if (!exp) return;
+  const remaining = new Date(exp) - Date.now();
+  const label = el.querySelector('.expires-label');
+  if (!label) return;
+  if (remaining < 0) label.classList.add('expired');
+  else if (remaining < 3600000) label.classList.add('expires-soon'); // < 1 hour
+});
 </script>
 {% endblock %}

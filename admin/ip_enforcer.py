@@ -52,6 +52,9 @@ def _handle_connection(ip: str, secret: str):
     try:
         user = get_user_by_secret(secret)
         if not user:
+            # Could be expired token — ban briefly to force disconnect
+            _ban_ip(ip)
+            threading.Timer(BAN_DURATION, _unban_ip, args=[ip]).start()
             return
 
         result = update_device_binding(user["name"], ip, cooldown_hours=DEVICE_COOLDOWN_HOURS)

@@ -119,7 +119,12 @@ def create_user():
     if not name:
         return jsonify({"error": "Name required"}), 400
     try:
-        user = user_store.add_user(name)
+        ttl_days = int(request.form.get("ttl_days", 0) or 0)
+        ttl_hours = int(request.form.get("ttl_hours", 0) or 0)
+    except ValueError:
+        ttl_days = ttl_hours = 0
+    try:
+        user = user_store.add_user(name, ttl_days=ttl_days, ttl_hours=ttl_hours)
         proxy_config.write_and_reload(user_store.load_users())
         return redirect(url_for("users_list"))
     except ValueError as e:
@@ -179,6 +184,18 @@ def health():
     return "ok"
 
 
+def _expiry_worker():
+    while True:
+        time.sleep(60)
+        try:
+            deleted = user_store.purge_expired_users()
+            if deleted:
+                logger.info("Expired users removed: %s", deleted)
+                proxy_config.write_and_reload(user_store.load_users())
+        except Exception as e:
+            logger.error("Expiry worker error: %s", e)
+
+
 def _init():
     os.makedirs("/cache", exist_ok=True)
     if not os.path.exists("/cache/users.json"):
@@ -186,6 +203,7 @@ def _init():
         logger.info("Initialized empty users.json")
     proxy_config.write_and_reload(user_store.load_users())
     ip_enforcer.start()
+    threading.Thread(target=_expiry_worker, daemon=True, name="expiry-worker").start()
 
 
 if __name__ == "__main__":

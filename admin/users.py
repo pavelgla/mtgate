@@ -2,7 +2,7 @@ import json
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 USERS_FILE = "/cache/users.json"
 _lock = threading.Lock()
@@ -25,11 +25,16 @@ def save_users(users: list[dict]):
     os.replace(tmp, USERS_FILE)
 
 
-def add_user(name: str) -> dict:
+def add_user(name: str, ttl_days: int = 0, ttl_hours: int = 0) -> dict:
     with _lock:
         users = _load_unlocked()
         if any(u["name"] == name for u in users):
             raise ValueError(f"User '{name}' already exists")
+        now = datetime.now(timezone.utc)
+        expires_at = None
+        total_hours = ttl_days * 24 + ttl_hours
+        if total_hours > 0:
+            expires_at = (now + timedelta(hours=total_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
         user = {
             "name": name,
             "secret": os.urandom(16).hex(),
@@ -37,7 +42,8 @@ def add_user(name: str) -> dict:
             "active_ip": None,
             "bound_ip": None,
             "last_seen": None,
-            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "expires_at": expires_at,
         }
         users.append(user)
         save_users(users)
@@ -143,8 +149,33 @@ def get_user_by_secret(secret: str) -> dict | None:
     users = load_users()
     for u in users:
         if u["secret"] == secret:
+            expires_at = u.get("expires_at")
+            if expires_at:
+                exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                if datetime.now(timezone.utc) >= exp_dt:
+                    return None  # token expired
             return u
     return None
+
+
+def purge_expired_users() -> list[str]:
+    """Delete all users whose expires_at has passed. Returns list of deleted names."""
+    now = datetime.now(timezone.utc)
+    deleted = []
+    with _lock:
+        users = _load_unlocked()
+        remaining = []
+        for u in users:
+            expires_at = u.get("expires_at")
+            if expires_at:
+                exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                if now >= exp_dt:
+                    deleted.append(u["name"])
+                    continue
+            remaining.append(u)
+        if deleted:
+            save_users(remaining)
+    return deleted
 
 
 def generate_tg_link(secret: str, host: str, port: int) -> str:
