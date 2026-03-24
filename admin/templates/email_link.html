@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подключение к MTProto прокси — {{ name }}</title>
+</head>
+<body style="margin:0;padding:0;background:#0d1117;font-family:Arial,sans-serif;color:#c9d1d9">
+<div style="max-width:560px;margin:32px auto;background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden">
+  <div style="background:#1f6feb;padding:20px 28px">
+    <h1 style="margin:0;font-size:20px;color:#ffffff">MTProto прокси — данные подключения</h1>
+    <p style="margin:6px 0 0;font-size:13px;color:#cfe2ff">Для пользователя: <strong>{{ name }}</strong></p>
+  </div>
+  <div style="padding:24px 28px">
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.6">
+      Ниже находятся параметры для подключения к MTProto прокси.
+    </p>
+
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px">
+      <tr>
+        <td style="padding:8px 12px;background:#21262d;border:1px solid #30363d;color:#8b949e;width:110px">Сервер</td>
+        <td style="padding:8px 12px;background:#0d1117;border:1px solid #30363d;font-family:monospace;color:#79c0ff">{{ server_host }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;background:#21262d;border:1px solid #30363d;color:#8b949e">Порт</td>
+        <td style="padding:8px 12px;background:#0d1117;border:1px solid #30363d;font-family:monospace;color:#79c0ff">{{ server_port }}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;background:#21262d;border:1px solid #30363d;color:#8b949e">Протокол</td>
+        <td style="padding:8px 12px;background:#0d1117;border:1px solid #30363d;color:#c9d1d9">MTProto</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;background:#21262d;border:1px solid #30363d;color:#8b949e">Секрет</td>
+        <td style="padding:8px 12px;background:#0d1117;border:1px solid #30363d;font-family:monospace;font-size:11px;word-break:break-all;color:#d2a8ff">{{ secret }}</td>
+      </tr>
+    </table>
+
+    <div style="text-align:center;margin-bottom:24px">
+      <a href="{{ link }}" style="display:inline-block;background:#1f6feb;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:600">
+        Подключиться в Telegram
+      </a>
+    </div>
+
+    <div style="background:#21262d;border:1px solid #30363d;border-radius:6px;padding:16px 20px">
+      <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#c9d1d9">Инструкция по подключению вручную:</p>
+      <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.8;color:#8b949e">
+        <li>Откройте <strong style="color:#c9d1d9">Telegram → Настройки → Конфиденциальность → Прокси</strong></li>
+        <li>Нажмите <strong style="color:#c9d1d9">Добавить прокси</strong>, выберите тип <strong style="color:#c9d1d9">MTProto</strong></li>
+        <li>Введите <strong style="color:#c9d1d9">Сервер:</strong> <code style="background:#0d1117;padding:1px 5px;border-radius:3px;font-size:12px;color:#79c0ff">{{ server_host }}</code>, <strong style="color:#c9d1d9">Порт:</strong> <code style="background:#0d1117;padding:1px 5px;border-radius:3px;font-size:12px;color:#79c0ff">{{ server_port }}</code></li>
+        <li>Скопируйте секрет выше и вставьте в поле <strong style="color:#c9d1d9">Секрет</strong></li>
+        <li>Нажмите <strong style="color:#c9d1d9">Сохранить</strong> и включите прокси</li>
+      </ol>
+    </div>
+  </div>
+  <div style="padding:12px 28px;border-top:1px solid #30363d;font-size:11px;color:#484f58;text-align:center">
+    Это письмо сформировано автоматически системой управления MTGate.
+  </div>
+</div>
+</body>
+</html>

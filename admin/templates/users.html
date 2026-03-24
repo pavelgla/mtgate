@@ -5,9 +5,17 @@
 <style>
   .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .page-header h2 { font-size: 18px; font-weight: 600; }
-  .copy-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: var(--radius); padding: 3px 8px; font-size: 11px; cursor: pointer; transition: all 0.15s; }
-  .copy-btn:hover { border-color: var(--link); color: var(--link); }
-  .copy-btn.copied { border-color: var(--accent); color: #3fb950; }
+.manual { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 20px; font-size: 13px; line-height: 1.7; }
+  .manual h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+  .manual code { font-family: monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+  .manual ol { padding-left: 20px; margin: 0; }
+  .manual li { margin-bottom: 4px; }
+  .server-params { display: flex; gap: 24px; margin-bottom: 12px; flex-wrap: wrap; }
+  .server-params .param { }
+  .server-params .param-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .server-params .param-value { font-family: monospace; font-size: 14px; font-weight: 600; }
+  .traffic-cell { font-family: monospace; font-size: 12px; color: var(--muted); }
+  .geo-cell { font-size: 12px; color: var(--muted); }
   .ip-cell { font-family: monospace; font-size: 12px; color: var(--muted); }
   .date-cell { font-size: 12px; color: var(--muted); }
   .actions-cell { display: flex; gap: 6px; align-items: center; }
@@ -17,10 +25,34 @@
   .expired { color: #f85149; }
   .ttl-row { display: flex; gap: 8px; }
   .ttl-row .form-group { flex: 1; }
+  .ping-btn { font-size: 11px; padding: 2px 7px; cursor: pointer; }
+  .ping-result { font-family: monospace; font-size: 11px; color: var(--muted); margin-left: 4px; }
+  .ping-result.ok { color: #3fb950; }
+  .ping-result.err { color: #f85149; }
+  .comment-icon { font-size: 13px; cursor: pointer; color: var(--muted); margin-left: 4px; vertical-align: middle; }
+  .comment-icon.has-comment { color: #e3b341; }
+  [data-tooltip] { position: relative; }
+  [data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #2d333b; color: #cdd9e5; border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12px; white-space: pre-wrap; max-width: 260px; z-index: 100; pointer-events: none; }
+  .services-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .svc-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 16px; display: flex; align-items: center; gap: 10px; min-width: 160px; }
+  .svc-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .svc-dot.ok  { background: #3fb950; box-shadow: 0 0 6px #3fb95088; }
+  .svc-dot.warn { background: #e3b341; box-shadow: 0 0 6px #e3b34188; }
+  .svc-dot.err { background: #f85149; box-shadow: 0 0 6px #f8514988; }
+  .svc-dot.unknown { background: #8b949e; }
+  .svc-info { }
+  .svc-label { font-size: 13px; font-weight: 600; }
+  .svc-status { font-size: 11px; color: var(--muted); }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<!-- Services health -->
+<div class="services-bar" id="services-bar">
+  <div class="svc-card"><div class="svc-dot unknown"></div><div class="svc-info"><div class="svc-label">Загрузка…</div></div></div>
+</div>
+
 <div class="page-header">
   <div>
     <h2>Пользователи</h2>
@@ -31,37 +63,91 @@
   </button>
 </div>
 
+<div class="manual">
+  <h3>Подключение к прокси</h3>
+  <div class="server-params">
+    <div class="param">
+      <div class="param-label">Сервер</div>
+      <div class="param-value">{{ server_host }}</div>
+    </div>
+    <div class="param">
+      <div class="param-label">Порт</div>
+      <div class="param-value">{{ server_port }}</div>
+    </div>
+    <div class="param">
+      <div class="param-label">Протокол</div>
+      <div class="param-value">MTProto</div>
+    </div>
+    <div class="param">
+      <div class="param-label">Тип секрета</div>
+      <div class="param-value">ee... (fake-TLS)</div>
+    </div>
+  </div>
+  <ol>
+    <li>Откройте <strong>Telegram → Настройки → Конфиденциальность → Прокси</strong></li>
+    <li>Нажмите <strong>Добавить прокси</strong>, выберите тип <strong>MTProto</strong></li>
+    <li>Введите <strong>Сервер:</strong> <code>{{ server_host }}</code>, <strong>Порт:</strong> <code>{{ server_port }}</code></li>
+    <li>Вставьте токен из таблицы ниже в поле <strong>Секрет</strong></li>
+    <li>Нажмите <strong>Сохранить</strong> и включите прокси</li>
+  </ol>
+</div>
+
 {% if users %}
 <table>
   <thead>
     <tr>
       <th>Имя</th>
       <th>Статус</th>
-      <th>Привязан к</th>
+      <th>Трафик</th>
       <th>Активный IP</th>
+      <th>Город / Провайдер</th>
+      <th>Пинг</th>
       <th>Создан</th>
       <th>Истекает</th>
-      <th>Ссылка</th>
+      <th>Токен</th>
       <th>Действия</th>
     </tr>
   </thead>
   <tbody id="users-tbody">
     {% for user in users %}
-    <tr data-name="{{ user.name }}">
-      <td><strong>{{ user.name }}</strong></td>
+    <tr data-name="{{ user.name }}" data-secret="{{ user.secret }}" data-comment="{{ user.get('comment', '') }}">
+      <td>
+        <strong>{{ user.name }}</strong>
+        {% set cmt = user.get('comment', '') %}
+        <span class="comment-icon {% if cmt %}has-comment{% endif %}"
+              {% if cmt %}data-tooltip="{{ cmt }}"{% endif %}
+              onclick="openCommentModal('{{ user.name }}', this)"
+              title="{% if cmt %}{{ cmt }}{% else %}Добавить комментарий{% endif %}">✎</span>
+      </td>
       <td>
         <span class="badge {% if user.enabled %}badge-green{% else %}badge-red{% endif %}" data-status>
           {% if user.enabled %}активен{% else %}отключён{% endif %}
         </span>
       </td>
-      <td class="ip-cell" data-bound-ip>
-        {% if user.bound_ip %}
-          <span title="Устройство привязано">{{ user.bound_ip }}</span>
-        {% else %}
-          <span style="color:var(--muted)">не привязан</span>
-        {% endif %}
+      <td data-traffic class="traffic-cell">
+        {% set mb = user.get('traffic_mb', 0) %}
+        {% if mb >= 1000 %}{{ "%.2f GB" | format(mb / 1000) }}
+        {% elif mb >= 1 %}{{ "%.1f MB" | format(mb) }}
+        {% else %}{{ "%.0f KB" | format(mb * 1024) }}{% endif %}
       </td>
       <td class="ip-cell" data-ip>{{ user.active_ip or '—' }}</td>
+      <td class="geo-cell" data-geo>
+        {% set geo = user.get('geo', {}) %}
+        {% if geo.get('city') %}
+          {{ geo.city }}{% if geo.country %}, {{ geo.country }}{% endif %}<br>
+          <span style="color:var(--muted);font-size:11px">{{ geo.isp }}</span>
+        {% else %}
+          <span style="color:var(--muted)">—</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if user.active_ip %}
+        <button class="btn btn-secondary btn-sm ping-btn" onclick="doPing('{{ user.name }}', this)">Пинг</button>
+        <span class="ping-result" id="ping-{{ user.name }}"></span>
+        {% else %}
+        <span style="color:var(--muted)">—</span>
+        {% endif %}
+      </td>
       <td class="date-cell">{{ user.created_at[:10] }}</td>
       <td class="date-cell" data-expires="{{ user.expires_at or '' }}">
         {% if user.expires_at %}
@@ -70,10 +156,12 @@
           <span style="color:var(--muted)">—</span>
         {% endif %}
       </td>
-      <td>
-        <button class="copy-btn" onclick="copyLink('{{ user.name }}', this)" title="Копировать tg:// ссылку">
-          📋 Скопировать
-        </button>
+      <td class="actions-cell">
+        <button class="btn btn-secondary btn-sm" onclick="copyToken('{{ user.name }}', this)" title="Скопировать токен">Токен</button>
+        <button class="btn btn-secondary btn-sm" onclick="copyLink('{{ user.name }}', this)" title="Скопировать tg:// ссылку">Ссылка</button>
+        {% if smtp_enabled %}
+        <button class="btn btn-secondary btn-sm" onclick="openEmailModal('{{ user.name }}')" title="Отправить ссылку на почту">✉ Почта</button>
+        {% endif %}
       </td>
       <td class="actions-cell">
         <form method="POST" action="/users/{{ user.name }}/toggle">
@@ -129,33 +217,205 @@
     </form>
   </div>
 </div>
+<!-- Email modal -->
+<div class="modal-overlay" id="email-modal" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal">
+    <h3>Отправить ссылку на почту</h3>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="email-input" placeholder="user@example.com" style="width:100%">
+    </div>
+    <div id="email-status" style="font-size:13px;margin-bottom:8px;display:none"></div>
+    <div class="actions">
+      <button type="button" class="btn btn-secondary" onclick="document.getElementById('email-modal').classList.remove('active')">Отмена</button>
+      <button type="button" class="btn btn-primary" id="email-send-btn" onclick="submitEmail()">Отправить</button>
+    </div>
+  </div>
+</div>
+<!-- Comment modal -->
+<div class="modal-overlay" id="comment-modal" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="modal">
+    <h3>Комментарий</h3>
+    <div class="form-group">
+      <label id="comment-modal-label">Комментарий для пользователя</label>
+      <textarea id="comment-input" rows="3" placeholder="Произвольный текст..." style="width:100%;resize:vertical"></textarea>
+    </div>
+    <div id="comment-status" style="font-size:13px;margin-bottom:8px;display:none"></div>
+    <div class="actions">
+      <button type="button" class="btn btn-secondary" onclick="document.getElementById('comment-modal').classList.remove('active')">Отмена</button>
+      <button type="button" class="btn btn-primary" id="comment-save-btn" onclick="submitComment()">Сохранить</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+function _copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+function _flashBtn(btn, successText) {
+  const orig = btn.textContent;
+  btn.textContent = successText;
+  btn.disabled = true;
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+}
+
+function copyToken(name, btn) {
+  const row = document.querySelector(`tr[data-name="${name}"]`);
+  const secret = row ? row.dataset.secret : '';
+  _copyText('ee' + secret + '7777772e676f6f676c652e636f6d')
+    .then(() => _flashBtn(btn, '✓ Скопировано'))
+    .catch(() => _flashBtn(btn, 'Ошибка'));
+}
+
 async function copyLink(name, btn) {
   try {
-    const res = await fetch(`/users/${name}/link`);
+    const res = await fetch('/users/' + encodeURIComponent(name) + '/link');
     const data = await res.json();
     if (data.link) {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(data.link);
-      } else {
-        const ta = document.createElement('textarea');
-        ta.value = data.link;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      }
-      btn.textContent = '✓ Скопировано';
-      btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = '📋 Скопировать'; btn.classList.remove('copied'); }, 2000);
+      await _copyText(data.link);
+      _flashBtn(btn, '✓ Скопировано');
+    } else {
+      _flashBtn(btn, 'Ошибка');
     }
   } catch (e) {
-    alert('Не удалось скопировать: ' + e.message);
+    _flashBtn(btn, 'Ошибка');
+  }
+}
+
+let _emailModalName = '';
+function openEmailModal(name) {
+  _emailModalName = name;
+  document.getElementById('email-input').value = '';
+  const st = document.getElementById('email-status');
+  st.style.display = 'none';
+  st.textContent = '';
+  document.getElementById('email-send-btn').disabled = false;
+  document.getElementById('email-modal').classList.add('active');
+  setTimeout(() => document.getElementById('email-input').focus(), 50);
+}
+
+async function submitEmail() {
+  const email = document.getElementById('email-input').value.trim();
+  const st = document.getElementById('email-status');
+  if (!email) { st.style.display = 'block'; st.style.color = '#f85149'; st.textContent = 'Введите email.'; return; }
+  const btn = document.getElementById('email-send-btn');
+  btn.disabled = true;
+  st.style.display = 'block';
+  st.style.color = 'var(--muted)';
+  st.textContent = 'Отправка…';
+  try {
+    const res = await fetch('/users/' + encodeURIComponent(_emailModalName) + '/send-link', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      st.style.color = '#3fb950';
+      st.textContent = 'Письмо отправлено!';
+      setTimeout(() => document.getElementById('email-modal').classList.remove('active'), 1500);
+    } else {
+      st.style.color = '#f85149';
+      st.textContent = data.error || 'Ошибка отправки.';
+      btn.disabled = false;
+    }
+  } catch (e) {
+    st.style.color = '#f85149';
+    st.textContent = 'Ошибка сети.';
+    btn.disabled = false;
+  }
+}
+
+async function doPing(name, btn) {
+  const el = document.getElementById('ping-' + name);
+  btn.disabled = true;
+  el.textContent = '…';
+  el.className = 'ping-result';
+  try {
+    const res = await fetch('/api/ping/' + encodeURIComponent(name));
+    const data = await res.json();
+    if (data.avg_ms !== undefined) {
+      el.textContent = data.avg_ms.toFixed(1) + ' ms';
+      el.className = 'ping-result ok';
+    } else {
+      el.textContent = data.error || 'err';
+      el.className = 'ping-result err';
+    }
+  } catch (e) {
+    el.textContent = 'err';
+    el.className = 'ping-result err';
+  }
+  btn.disabled = false;
+}
+
+let _commentModalName = '';
+let _commentIconEl = null;
+function openCommentModal(name, iconEl) {
+  _commentModalName = name;
+  _commentIconEl = iconEl;
+  const row = document.querySelector(`tr[data-name="${name}"]`);
+  const existing = row ? (row.dataset.comment || '') : '';
+  document.getElementById('comment-input').value = existing;
+  document.getElementById('comment-modal-label').textContent = 'Комментарий для ' + name;
+  const st = document.getElementById('comment-status');
+  st.style.display = 'none';
+  document.getElementById('comment-save-btn').disabled = false;
+  document.getElementById('comment-modal').classList.add('active');
+  setTimeout(() => document.getElementById('comment-input').focus(), 50);
+}
+
+async function submitComment() {
+  const comment = document.getElementById('comment-input').value;
+  const btn = document.getElementById('comment-save-btn');
+  const st = document.getElementById('comment-status');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/users/' + encodeURIComponent(_commentModalName) + '/comment', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({comment}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // Update UI
+      const row = document.querySelector(`tr[data-name="${_commentModalName}"]`);
+      if (row) row.dataset.comment = comment;
+      if (_commentIconEl) {
+        if (comment.trim()) {
+          _commentIconEl.classList.add('has-comment');
+          _commentIconEl.dataset.tooltip = comment.trim();
+          _commentIconEl.title = comment.trim();
+        } else {
+          _commentIconEl.classList.remove('has-comment');
+          delete _commentIconEl.dataset.tooltip;
+          _commentIconEl.title = 'Добавить комментарий';
+        }
+      }
+      document.getElementById('comment-modal').classList.remove('active');
+    } else {
+      st.style.display = 'block'; st.style.color = '#f85149';
+      st.textContent = data.error || 'Ошибка.';
+      btn.disabled = false;
+    }
+  } catch (e) {
+    st.style.display = 'block'; st.style.color = '#f85149';
+    st.textContent = 'Ошибка сети.';
+    btn.disabled = false;
   }
 }
 
@@ -176,8 +436,32 @@ async function refreshUsers() {
       }
       const ipEl = row.querySelector('[data-ip]');
       if (ipEl) ipEl.textContent = u.active_ip || '—';
-      const boundEl = row.querySelector('[data-bound-ip]');
-      if (boundEl) boundEl.textContent = u.bound_ip || 'не привязан';
+      const pingCell = document.getElementById('ping-' + u.name);
+      if (pingCell && u.active_ip && !pingCell.previousElementSibling) {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary btn-sm ping-btn';
+        btn.textContent = 'Пинг';
+        btn.onclick = function() { doPing(u.name, this); };
+        pingCell.parentElement.insertBefore(btn, pingCell);
+      }
+      const trafficEl = row.querySelector('[data-traffic]');
+      if (trafficEl) {
+        const mb = u.traffic_mb || 0;
+        let text;
+        if (mb >= 1000) text = (mb / 1000).toFixed(2) + ' GB';
+        else if (mb >= 1) text = mb.toFixed(1) + ' MB';
+        else text = Math.round(mb * 1024) + ' KB';
+        trafficEl.textContent = text;
+      }
+      const geoEl = row.querySelector('[data-geo]');
+      if (geoEl) {
+        const g = u.geo || {};
+        if (g.city) {
+          geoEl.innerHTML = `${g.city}${g.country ? ', ' + g.country : ''}<br><span style="color:var(--muted);font-size:11px">${g.isp || ''}</span>`;
+        } else {
+          geoEl.innerHTML = '<span style="color:var(--muted)">—</span>';
+        }
+      }
       const expiresEl = row.querySelector('[data-expires]');
       if (expiresEl && u.expires_at) {
         expiresEl.dataset.expires = u.expires_at;
@@ -194,6 +478,38 @@ async function refreshUsers() {
 }
 
 setInterval(refreshUsers, 30000);
+
+async function refreshServices() {
+  try {
+    const res = await fetch('/api/services');
+    if (!res.ok) return;
+    const services = await res.json();
+    const bar = document.getElementById('services-bar');
+    if (!bar || !Array.isArray(services)) return;
+    bar.innerHTML = services.map(s => {
+      let dotClass, statusText;
+      if (s.status === 'running') {
+        if (s.health === 'unhealthy') { dotClass = 'err'; statusText = 'unhealthy'; }
+        else if (s.health === 'starting') { dotClass = 'warn'; statusText = 'starting…'; }
+        else { dotClass = 'ok'; statusText = s.health === 'healthy' ? 'healthy' : 'running'; }
+      } else if (s.status === 'missing') {
+        dotClass = 'err'; statusText = 'не найден';
+      } else {
+        dotClass = 'err'; statusText = s.status;
+      }
+      return `<div class="svc-card">
+        <div class="svc-dot ${dotClass}"></div>
+        <div class="svc-info">
+          <div class="svc-label">${s.label}</div>
+          <div class="svc-status">${statusText}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) { /* silent */ }
+}
+
+refreshServices();
+setInterval(refreshServices, 30000);
 
 // Highlight expiring tokens on load
 document.querySelectorAll('[data-expires]').forEach(el => {

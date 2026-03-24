@@ -131,6 +131,17 @@ def update_device_binding(name: str, ip: str, cooldown_hours: int = 24) -> str:
         raise ValueError(f"User '{name}' not found")
 
 
+def set_comment(name: str, comment: str):
+    with _lock:
+        users = _load_unlocked()
+        for u in users:
+            if u["name"] == name:
+                u["comment"] = comment.strip()
+                save_users(users)
+                return
+        raise ValueError(f"User '{name}' not found")
+
+
 def reset_bound_ip(name: str):
     """Reset device binding so next connection can claim the token."""
     with _lock:
@@ -178,9 +189,12 @@ def purge_expired_users() -> list[str]:
     return deleted
 
 
-def generate_tg_link(secret: str, host: str, port: int) -> str:
-    """Generate tg://proxy link. Prefix 'ee' = fake-TLS (MTProto v2)."""
-    return f"tg://proxy?server={host}&port={port}&secret=ee{secret}"
+def generate_tg_link(secret: str, host: str, port: int, tls_domain: str = "www.google.com") -> str:
+    """Generate tg://proxy link. Prefix 'ee' = fake-TLS (MTProto v2).
+    Full secret format: ee + secret_hex + hex(tls_domain)
+    """
+    domain_hex = tls_domain.encode().hex()
+    return f"tg://proxy?server={host}&port={port}&secret=ee{secret}{domain_hex}"
 
 
 def _load_unlocked() -> list[dict]:
