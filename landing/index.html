@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTGate — быстрый прокси для Telegram</title>
+<meta name="description" content="Стабильный MTProto прокси для Telegram. Быстро, безопасно, без ограничений.">
+<style>
+  :root {
+    --bg:        #050d1a;
+    --bg2:       #0a1628;
+    --bg3:       #0f1f38;
+    --accent:    #3b82f6;
+    --accent2:   #60a5fa;
+    --glow:      rgba(59,130,246,0.35);
+    --glow2:     rgba(59,130,246,0.12);
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --border:    rgba(59,130,246,0.2);
+    --card:      rgba(255,255,255,0.03);
+    --mono:      'SF Mono','Fira Code','Cascadia Code','Courier New',monospace;
+    --sans:      -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── SCAN-LINE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 2px; }
+
+  /* ── NOISE TEXTURE ── */
+  .noise {
+    position: relative;
+    isolation: isolate;
+  }
+  .noise::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background: rgba(5,13,26,0.8);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-logo {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+
+  .nav-logo span {
+    color: var(--accent);
+    text-shadow: 0 0 12px var(--glow);
+  }
+
+  .nav-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.45rem 1.1rem;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: all 0.2s;
+    box-shadow: 0 0 16px var(--glow);
+  }
+
+  .nav-cta:hover {
+    background: var(--accent2);
+    box-shadow: 0 0 28px var(--glow);
+    transform: translateY(-1px);
+  }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 6rem 1.5rem 4rem;
+    overflow: hidden;
+  }
+
+  #hero-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.5;
+  }
+
+  .hero-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(600px, 90vw);
+    height: min(600px, 90vw);
+    background: radial-gradient(circle, rgba(59,130,246,0.18) 0%, transparent 70%);
+    pointer-events: none;
+    animation: pulse 4s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+    50%       { opacity: 1;   transform: translate(-50%, -50%) scale(1.08); }
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 2;
+    max-width: 760px;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    background: rgba(59,130,246,0.1);
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.9rem;
+    border-radius: 100px;
+    margin-bottom: 1.8rem;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+    animation: blink 1.5s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.2; }
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(2rem, 5.5vw, 3.8rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    color: #fff;
+    margin-bottom: 1.2rem;
+  }
+
+  h1 em {
+    font-style: normal;
+    color: var(--accent);
+    text-shadow: 0 0 30px var(--glow), 0 0 60px rgba(59,130,246,0.2);
+  }
+
+  .hero-sub {
+    font-size: clamp(1rem, 2.2vw, 1.2rem);
+    color: var(--muted);
+    max-width: 520px;
+    margin: 0 auto 2.5rem;
+    line-height: 1.7;
+  }
+
+  .hero-sub strong {
+    color: var(--text);
+  }
+
+  .hero-cta-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--accent);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 0.85rem 2rem;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.25s;
+    box-shadow: 0 0 24px var(--glow), 0 4px 16px rgba(0,0,0,0.4);
+    letter-spacing: 0.01em;
+  }
+
+  .btn-primary:hover {
+    background: var(--accent2);
+    transform: translateY(-2px);
+    box-shadow: 0 0 40px var(--glow), 0 8px 24px rgba(0,0,0,0.5);
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    color: var(--accent2);
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 0.85rem 2rem;
+    border-radius: 8px;
+    text-decoration: none;
+    border: 1px solid var(--border);
+    transition: all 0.25s;
+  }
+
+  .btn-secondary:hover {
+    background: var(--glow2);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 2.5rem;
+    justify-content: center;
+    margin-top: 3.5rem;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-num {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-shadow: 0 0 16px var(--glow);
+    display: block;
+  }
+
+  .stat-label {
+    font-size: 0.78rem;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ── SECTION COMMON ── */
+  section {
+    padding: 5rem 1.5rem;
+  }
+
+  .section-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+
+  .section-tag {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+    display: block;
+  }
+
+  h2 {
+    font-family: var(--mono);
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: #fff;
+    margin-bottom: 0.75rem;
+  }
+
+  h2 .dim { color: var(--muted); }
+
+  .section-desc {
+    color: var(--muted);
+    font-size: 1.05rem;
+    max-width: 500px;
+    line-height: 1.7;
+    margin-bottom: 3rem;
+  }
+
+  /* ── FEATURES ── */
+  .features-bg {
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 50%, var(--bg) 100%);
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .feature-card {
+    background: var(--bg);
+    padding: 2.5rem 2rem;
+    position: relative;
+    transition: background 0.3s;
+    overflow: hidden;
+  }
+
+  .feature-card:hover {
+    background: var(--bg2);
+  }
+
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .feature-card:hover::before {
+    opacity: 1;
+  }
+
+  .feature-icon {
+    width: 48px; height: 48px;
+    background: rgba(59,130,246,0.1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    font-size: 1.4rem;
+    transition: all 0.3s;
+  }
+
+  .feature-card:hover .feature-icon {
+    background: rgba(59,130,246,0.2);
+    box-shadow: 0 0 20px var(--glow2);
+    border-color: var(--accent);
+  }
+
+  .feature-card h3 {
+    font-family: var(--mono);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 0.6rem;
+    letter-spacing: -0.01em;
+  }
+
+  .feature-card p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.7;
+  }
+
+  .feature-tag {
+    display: inline-block;
+    margin-top: 1rem;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--accent2);
+    background: rgba(59,130,246,0.08);
+    border: 1px solid rgba(59,130,246,0.2);
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── PRICING ── */
+  .pricing-bg {
+    background: var(--bg);
+    position: relative;
+  }
+
+  .pricing-bg::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 1px;
+    height: 100%;
+    background: linear-gradient(180deg, transparent, var(--border), transparent);
+  }
+
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    margin-top: 3rem;
+  }
+
+  .pricing-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    position: relative;
+    transition: all 0.3s;
+    overflow: hidden;
+  }
+
+  .pricing-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(59,130,246,0.4);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 30px var(--glow2);
+  }
+
+  .pricing-card.featured {
+    background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(59,130,246,0.06));
+    border-color: rgba(59,130,246,0.5);
+    box-shadow: 0 0 40px var(--glow2);
+  }
+
+  .pricing-card.featured:hover {
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 50px var(--glow);
+  }
+
+  .pricing-corner {
+    position: absolute;
+    top: -1px; right: -1px;
+  }
+
+  .pricing-badge {
+    background: var(--accent);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 0.35rem 0.9rem;
+    border-radius: 0 16px 0 12px;
+    text-transform: uppercase;
+  }
+
+  .pricing-plan {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .pricing-price {
+    font-family: var(--mono);
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 0.3rem;
+  }
+
+  .pricing-price sup {
+    font-size: 1.1rem;
+    vertical-align: super;
+    color: var(--accent2);
+  }
+
+  .pricing-card.featured .pricing-price {
+    color: var(--accent2);
+    text-shadow: 0 0 20px var(--glow);
+  }
+
+  .pricing-per {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .pricing-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 1.25rem 0;
+  }
+
+  .pricing-features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .pricing-features li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.88rem;
+    color: var(--text);
+  }
+
+  .pricing-features li::before {
+    content: '//';
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 0.75rem;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  .btn-plan {
+    display: block;
+    text-align: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--accent2);
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.25s;
+    font-family: var(--mono);
+  }
+
+  .btn-plan:hover {
+    background: var(--glow2);
+    border-color: var(--accent);
+  }
+
+  .btn-plan.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 20px var(--glow);
+  }
+
+  .btn-plan.primary:hover {
+    background: var(--accent2);
+    box-shadow: 0 0 32px var(--glow);
+  }
+
+  /* ── HOW IT WORKS ── */
+  .how-bg {
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg3) 50%, var(--bg) 100%);
+  }
+
+  .steps-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 2rem;
+    margin-top: 3rem;
+    position: relative;
+  }
+
+  .steps-container::before {
+    content: '';
+    position: absolute;
+    top: 2.5rem;
+    left: calc(100% / 6);
+    right: calc(100% / 6);
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border) 20%, var(--border) 80%, transparent);
+    display: none;
+  }
+
+  @media (min-width: 720px) {
+    .steps-container::before { display: block; }
+  }
+
+  .step {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 2rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    position: relative;
+    transition: all 0.3s;
+  }
+
+  .step:hover {
+    border-color: rgba(59,130,246,0.4);
+    background: rgba(59,130,246,0.04);
+  }
+
+  .step-num {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    background: rgba(59,130,246,0.1);
+    border: 1px solid var(--border);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .step h3 {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 0.5rem;
+  }
+
+  .step p {
+    font-size: 0.88rem;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+
+  .step-arrow {
+    font-size: 1.2rem;
+    color: var(--accent);
+    opacity: 0.4;
+    margin-top: 0.75rem;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2.5rem 1.5rem;
+    background: rgba(0,0,0,0.3);
+  }
+
+  .footer-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .footer-logo {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .footer-logo span { color: var(--accent); }
+
+  .footer-meta {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  .footer-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--accent2);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: color 0.2s;
+  }
+
+  .footer-link:hover { color: #fff; }
+
+  /* ── REVEAL ANIMATION ── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.65s ease, transform 0.65s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .reveal-delay-1 { transition-delay: 0.1s; }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+  .reveal-delay-3 { transition-delay: 0.3s; }
+  .reveal-delay-4 { transition-delay: 0.45s; }
+
+  /* ── TERMINAL CURSOR ── */
+  .cursor {
+    display: inline-block;
+    width: 3px;
+    height: 0.85em;
+    background: var(--accent);
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: cursor-blink 1s step-end infinite;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  @keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+
+  /* ── MOBILE ── */
+  @media (max-width: 640px) {
+    nav { padding: 0.9rem 1.2rem; }
+    .hero-stats { gap: 1.5rem; }
+    .steps-container { grid-template-columns: 1fr; }
+    h2 { font-size: 1.55rem; }
+  }
+</style>
+</head>
+<body class="noise">
+
+<!-- ═══ NAV ═══ -->
+<nav>
+  <div class="nav-logo">MT<span>Gate</span></div>
+  <a class="nav-cta" href="https://t.me/BOT_USERNAME">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.01 9.47c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.873.751z"/></svg>
+    Попробовать
+  </a>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-badge">MTProto Protocol · Россия</div>
+    <h1>MTGate —<br><em>быстрый прокси</em><br>для Telegram<span class="cursor"></span></h1>
+    <p class="hero-sub">
+      <strong>Стабильный доступ</strong> к Telegram в любых условиях.<br>
+      Без блокировок, без слежки, без лишних настроек.
+    </p>
+    <div class="hero-cta-group">
+      <a class="btn-primary" href="https://t.me/BOT_USERNAME">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.01 9.47c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.873.751z"/></svg>
+        Попробовать бесплатно
+      </a>
+      <a class="btn-secondary" href="#pricing">Смотреть тарифы ↓</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat">
+        <span class="stat-num">MTProto</span>
+        <span class="stat-label">Протокол</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">3 дня</span>
+        <span class="stat-label">Бесплатно</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">1 клик</span>
+        <span class="stat-label">Подключение</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FEATURES ═══ -->
+<section class="features-bg" id="features">
+  <div class="section-inner">
+    <span class="section-tag reveal">// преимущества</span>
+    <h2 class="reveal reveal-delay-1">Почему <span class="dim">MTGate</span></h2>
+    <p class="section-desc reveal reveal-delay-2">Никаких VPN-приложений и сложных настроек — только нативный прокси прямо в Telegram.</p>
+
+    <div class="features-grid">
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">⚡</div>
+        <h3>Максимальная скорость</h3>
+        <p>Нативный протокол MTProto работает напрямую с серверами Telegram. Никаких прокладок — только чистое соединение.</p>
+        <span class="feature-tag">MTProto v2</span>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">🔒</div>
+        <h3>Сквозное шифрование</h3>
+        <p>Весь трафик шифруется по стандарту MTProto. Ваши сообщения и данные не видны никому, включая нас.</p>
+        <span class="feature-tag">AES-256-IGE</span>
+      </div>
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon">🎯</div>
+        <h3>Одно касание</h3>
+        <p>Получите ссылку в боте и нажмите её — Telegram сам добавит прокси. Никаких IP, портов и секретов вручную.</p>
+        <span class="feature-tag">tg://proxy</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ PRICING ═══ -->
+<section class="pricing-bg" id="pricing">
+  <div class="section-inner">
+    <span class="section-tag reveal">// тарифы</span>
+    <h2 class="reveal reveal-delay-1">Выберите <span class="dim">план</span></h2>
+    <p class="section-desc reveal reveal-delay-2">Начните бесплатно. Никаких скрытых платежей и автопродления.</p>
+
+    <div class="pricing-grid">
+      <!-- Trial -->
+      <div class="pricing-card reveal reveal-delay-1">
+        <p class="pricing-plan">Пробный</p>
+        <div class="pricing-price">0<sup>₽</sup></div>
+        <p class="pricing-per">3 дня бесплатно</p>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li>Полный доступ к прокси</li>
+          <li>Персональный секрет</li>
+          <li>Без карты</li>
+        </ul>
+        <a href="https://t.me/BOT_USERNAME" class="btn-plan">Начать →</a>
+      </div>
+
+      <!-- 1 month -->
+      <div class="pricing-card reveal reveal-delay-2">
+        <p class="pricing-plan">Стандарт</p>
+        <div class="pricing-price">100<sup>₽</sup></div>
+        <p class="pricing-per">в месяц</p>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li>30 дней доступа</li>
+          <li>Высокий приоритет</li>
+          <li>Персональный прокси</li>
+        </ul>
+        <a href="https://t.me/BOT_USERNAME" class="btn-plan">Купить →</a>
+      </div>
+
+      <!-- 3 months -->
+      <div class="pricing-card featured reveal reveal-delay-3">
+        <div class="pricing-corner">
+          <span class="pricing-badge">Выгодно</span>
+        </div>
+        <p class="pricing-plan">Квартал</p>
+        <div class="pricing-price">200<sup>₽</sup></div>
+        <p class="pricing-per">на 3 месяца · экономия 33%</p>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li>90 дней доступа</li>
+          <li>Высокий приоритет</li>
+          <li>Персональный прокси</li>
+          <li>Экономия 100₽</li>
+        </ul>
+        <a href="https://t.me/BOT_USERNAME" class="btn-plan primary">Купить →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ HOW IT WORKS ═══ -->
+<section class="how-bg" id="how">
+  <div class="section-inner">
+    <span class="section-tag reveal">// подключение</span>
+    <h2 class="reveal reveal-delay-1">Три шага <span class="dim">до доступа</span></h2>
+    <p class="section-desc reveal reveal-delay-2">Настройка занимает меньше минуты. Без технических знаний.</p>
+
+    <div class="steps-container">
+      <div class="step reveal reveal-delay-1">
+        <div class="step-num">01</div>
+        <h3>Откройте бот</h3>
+        <p>Перейдите в @BOT_USERNAME в Telegram и нажмите «Старт». Бот мгновенно вас распознает.</p>
+        <div class="step-arrow">→</div>
+      </div>
+      <div class="step reveal reveal-delay-2">
+        <div class="step-num">02</div>
+        <h3>Выберите тариф</h3>
+        <p>Начните с бесплатного пробного периода на 3 дня или сразу выберите подходящий план.</p>
+        <div class="step-arrow">→</div>
+      </div>
+      <div class="step reveal reveal-delay-3">
+        <div class="step-num">03</div>
+        <h3>Нажмите ссылку</h3>
+        <p>Бот пришлёт ссылку вида <code style="font-family:var(--mono);color:var(--accent);font-size:0.8em">tg://proxy?…</code> — одно нажатие и прокси добавлен.</p>
+        <div class="step-arrow">✓</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-logo">MT<span>Gate</span></div>
+    <div class="footer-meta">© <span id="year"></span> MTGate. MTProto Proxy</div>
+    <a class="footer-link" href="https://t.me/BOT_USERNAME">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.01 9.47c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.873.751z"/></svg>
+      @BOT_USERNAME
+    </a>
+  </div>
+</footer>
+
+<script>
+// ── YEAR ──
+document.getElementById('year').textContent = new Date().getFullYear();
+
+// ── PARTICLE CANVAS ──
+(function() {
+  const canvas = document.getElementById('hero-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, nodes, raf;
+  const COUNT = Math.min(55, Math.floor(window.innerWidth / 22));
+  const CONN_DIST = 160;
+  const ACCENT = '59,130,246';
+
+  function resize() {
+    W = canvas.width  = canvas.offsetWidth;
+    H = canvas.height = canvas.offsetHeight;
+  }
+
+  function init() {
+    nodes = Array.from({ length: COUNT }, () => ({
+      x:  Math.random() * W,
+      y:  Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      r:  Math.random() * 1.5 + 0.8,
+    }));
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // connections
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[i].x - nodes[j].x;
+        const dy = nodes[i].y - nodes[j].y;
+        const d  = Math.sqrt(dx * dx + dy * dy);
+        if (d < CONN_DIST) {
+          const a = (1 - d / CONN_DIST) * 0.35;
+          ctx.beginPath();
+          ctx.moveTo(nodes[i].x, nodes[i].y);
+          ctx.lineTo(nodes[j].x, nodes[j].y);
+          ctx.strokeStyle = `rgba(${ACCENT},${a})`;
+          ctx.lineWidth = 0.7;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // dots
+    nodes.forEach(n => {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${ACCENT},0.7)`;
+      ctx.fill();
+
+      // glow
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r * 5);
+      g.addColorStop(0, `rgba(${ACCENT},0.25)`);
+      g.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r * 5, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+    });
+  }
+
+  function step() {
+    nodes.forEach(n => {
+      n.x += n.vx;
+      n.y += n.vy;
+      if (n.x < -20) n.x = W + 20;
+      if (n.x > W + 20) n.x = -20;
+      if (n.y < -20) n.y = H + 20;
+      if (n.y > H + 20) n.y = -20;
+    });
+    draw();
+    raf = requestAnimationFrame(step);
+  }
+
+  window.addEventListener('resize', () => { resize(); init(); });
+  resize();
+  init();
+  step();
+})();
+
+// ── SCROLL REVEAL ──
+(function() {
+  const els = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  els.forEach(el => io.observe(el));
+})();
+</script>
+</body>
+</html>

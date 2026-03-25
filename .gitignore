@@ -4,3 +4,8 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+bot/node_modules/
+bot/.env
+bot/data/*.db
+bot/data/*.db-shm
+bot/data/*.db-wal

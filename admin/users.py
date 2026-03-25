@@ -189,6 +189,30 @@ def purge_expired_users() -> list[str]:
     return deleted
 
 
+def extend_user(name: str, days: int = 0, hours: int = 0) -> str:
+    """Extend user expiry by days/hours from now (or from current expiry if still valid).
+    Returns new expires_at string."""
+    total_hours = days * 24 + hours
+    if total_hours <= 0:
+        raise ValueError("days or hours must be positive")
+    with _lock:
+        users = _load_unlocked()
+        for u in users:
+            if u["name"] == name:
+                now = datetime.now(timezone.utc)
+                expires_at = u.get("expires_at")
+                if expires_at:
+                    exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                    base = exp_dt if exp_dt > now else now
+                else:
+                    base = now
+                new_expiry = (base + timedelta(hours=total_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                u["expires_at"] = new_expiry
+                save_users(users)
+                return new_expiry
+        raise ValueError(f"User '{name}' not found")
+
+
 def generate_tg_link(secret: str, host: str, port: int, tls_domain: str = "www.google.com") -> str:
     """Generate tg://proxy link. Prefix 'ee' = fake-TLS (MTProto v2).
     Full secret format: ee + secret_hex + hex(tls_domain)

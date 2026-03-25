@@ -27,6 +27,7 @@ app = Flask(__name__)
 app.secret_key = os.urandom(32)
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "changeme")
+API_TOKEN = os.environ.get("API_TOKEN", "")
 SERVER_HOST = os.environ.get("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "8444"))
 
@@ -201,6 +202,18 @@ def login_required(f):
     return decorated
 
 
+def require_api_token(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not API_TOKEN:
+            return jsonify({"error": "API_TOKEN not configured"}), 503
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer ") or auth[7:] != API_TOKEN:
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
 @app.route("/")
 def index():
     return redirect(url_for("users_list"))
@@ -368,9 +381,21 @@ def send_link(name: str):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/users")
-@login_required
+def _api_or_session_auth():
+    """Returns True if request is authenticated via session or valid Bearer token."""
+    if session.get("logged_in"):
+        return True
+    if API_TOKEN:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer ") and auth[7:] == API_TOKEN:
+            return True
+    return False
+
+
+@app.route("/api/users", methods=["GET"])
 def api_users():
+    if not _api_or_session_auth():
+        return jsonify({"error": "Unauthorized"}), 401
     all_users = user_store.load_users()
     with _connections_lock:
         conns = dict(_connections)
@@ -381,6 +406,88 @@ def api_users():
         ip = u.get("active_ip")
         u["geo"] = _fetch_geo(ip) if ip else {}
     return jsonify(all_users)
+
+
+@app.route("/api/users", methods=["POST"])
+@require_api_token
+def api_create_user():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    try:
+        ttl_days = int(data.get("ttl_days", 0) or 0)
+        ttl_hours = int(data.get("ttl_hours", 0) or 0)
+    except (ValueError, TypeError):
+        return jsonify({"error": "ttl_days and ttl_hours must be integers"}), 400
+    try:
+        user = user_store.add_user(name, ttl_days=ttl_days, ttl_hours=ttl_hours)
+        proxy_config.write_and_reload(user_store.load_users())
+        tg_link = user_store.generate_tg_link(user["secret"], SERVER_HOST, SERVER_PORT)
+        return jsonify({
+            "name": user["name"],
+            "secret": user["secret"],
+            "tg_link": tg_link,
+            "expires_at": user["expires_at"],
+        }), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+
+
+@app.route("/api/users/<name>", methods=["GET"])
+@require_api_token
+def api_get_user(name: str):
+    all_users = user_store.load_users()
+    user = next((u for u in all_users if u["name"] == name), None)
+    if not user:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({
+        "name": user["name"],
+        "enabled": user.get("enabled", True),
+        "active_ip": user.get("active_ip"),
+        "bound_ip": user.get("bound_ip"),
+        "last_seen": user.get("last_seen"),
+        "created_at": user.get("created_at"),
+        "expires_at": user.get("expires_at"),
+    })
+
+
+@app.route("/api/users/<name>/extend", methods=["PATCH"])
+@require_api_token
+def api_extend_user(name: str):
+    data = request.get_json(silent=True) or {}
+    try:
+        days = int(data.get("days", 0) or 0)
+        hours = int(data.get("hours", 0) or 0)
+    except (ValueError, TypeError):
+        return jsonify({"error": "days and hours must be integers"}), 400
+    try:
+        new_expiry = user_store.extend_user(name, days=days, hours=hours)
+        return jsonify({"name": name, "expires_at": new_expiry})
+    except ValueError as e:
+        status = 404 if "not found" in str(e).lower() else 400
+        return jsonify({"error": str(e)}), status
+
+
+@app.route("/api/users/<name>/toggle", methods=["PATCH"])
+@require_api_token
+def api_toggle_user(name: str):
+    try:
+        enabled = user_store.toggle_user(name)
+        proxy_config.write_and_reload(user_store.load_users())
+        return jsonify({"name": name, "enabled": enabled})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@app.route("/api/users/<name>", methods=["DELETE"])
+@require_api_token
+def api_delete_user(name: str):
+    deleted = user_store.delete_user(name)
+    if not deleted:
+        return jsonify({"error": "Not found"}), 404
+    proxy_config.write_and_reload(user_store.load_users())
+    return jsonify({"name": name, "deleted": True})
 
 
 @app.route("/api/ping/<name>")
